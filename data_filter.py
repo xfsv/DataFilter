@@ -91,6 +91,8 @@ class DataFilterApp(QMainWindow):
         self.hand_group:        QButtonGroup | None = None
         self.rating_radios:     dict[str, QRadioButton] = {}
         self.rating_group:      QButtonGroup | None = None
+        self.step_combo:        QComboBox | None = None
+        self.flag_lbl:          QLabel | None = None
 
         self.setWindowTitle("数据筛选工具")
         self.resize(1520, 900)
@@ -147,6 +149,13 @@ class DataFilterApp(QMainWindow):
         self.episode_combo.setFixedHeight(36)
         h.addWidget(self.episode_combo)
 
+        self.flag_lbl = QLabel("")
+        self.flag_lbl.setObjectName("flagLbl")
+        self.flag_lbl.setFixedHeight(24)
+        self.flag_lbl.setMinimumWidth(72)
+        self.flag_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(self.flag_lbl)
+
         h.addSpacing(16)
         self.prev_btn = QPushButton("◀  上一张  (A)")
         self.prev_btn.setFixedHeight(36)
@@ -160,6 +169,15 @@ class DataFilterApp(QMainWindow):
         self.next_btn = QPushButton("下一张  (D)  ▶")
         self.next_btn.setFixedHeight(36)
         h.addWidget(self.next_btn)
+
+        h.addSpacing(8)
+        h.addWidget(QLabel("步长："))
+        self.step_combo = QComboBox()
+        self.step_combo.addItems(["×1", "×2", "×5", "×10"])
+        self.step_combo.setFixedHeight(32)
+        self.step_combo.setFixedWidth(64)
+        self.step_combo.setToolTip("每次按 A / D 跳过的帧数")
+        h.addWidget(self.step_combo)
 
         h.addStretch()
 
@@ -595,6 +613,7 @@ class DataFilterApp(QMainWindow):
         self.current_image_idx = 0
 
         flag_exists = (ep_path / "flag.json").exists()
+        self._update_flag_indicator(flag_exists)
         if flag_exists:
             # 已有保存记录：清空后加载文件中的选项
             self._clear_checkboxes()
@@ -735,14 +754,24 @@ class DataFilterApp(QMainWindow):
         )
         self.image_label.setPixmap(scaled)
 
+    def _get_step(self) -> int:
+        """读取步长下拉框，返回每次跳跃的帧数。"""
+        if self.step_combo is None:
+            return 1
+        text = self.step_combo.currentText()   # "×1" / "×2" / "×5" / "×10"
+        try:
+            return int(text.lstrip("×"))
+        except ValueError:
+            return 1
+
     def _prev_image(self) -> None:
         if self.images:
-            self.current_image_idx = (self.current_image_idx - 1) % len(self.images)
+            self.current_image_idx = (self.current_image_idx - self._get_step()) % len(self.images)
             self._refresh_image()
 
     def _next_image(self) -> None:
         if self.images:
-            self.current_image_idx = (self.current_image_idx + 1) % len(self.images)
+            self.current_image_idx = (self.current_image_idx + self._get_step()) % len(self.images)
             self._refresh_image()
 
     def _on_episode_changed(self, idx: int) -> None:
@@ -778,6 +807,7 @@ class DataFilterApp(QMainWindow):
         try:
             with open(flag_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
+            self._update_flag_indicator(True)
             self._set_status(f"✓ 已保存  →  {flag_path}", "success")
             self._next_episode()
         except Exception as exc:
@@ -816,6 +846,7 @@ class DataFilterApp(QMainWindow):
                 self.images = []
                 self.image_label.setText("已无 episode 文件夹")
                 self.counter_lbl.setText("—  /  —")
+                self._update_flag_indicator(None)
                 return
 
             # 尽量停留在同一位置（原来的下一个），超出时退到末尾
@@ -887,6 +918,25 @@ class DataFilterApp(QMainWindow):
             self.unfilled_lbl.setVisible(True)
         else:
             self.unfilled_lbl.setVisible(False)
+
+    def _update_flag_indicator(self, flag_exists) -> None:
+        """更新 flag.json 存在状态徽标。
+        flag_exists=True  → 绿色 ✓ 已标注
+        flag_exists=False → 橙色 ○ 未标注
+        flag_exists=None  → 清空（无 episode 时）
+        """
+        if self.flag_lbl is None:
+            return
+        if flag_exists is None:
+            self.flag_lbl.setText("")
+            self.flag_lbl.setObjectName("flagLbl")
+        elif flag_exists:
+            self.flag_lbl.setText("✓ 已标注")
+            self.flag_lbl.setObjectName("flagLblDone")
+        else:
+            self.flag_lbl.setText("○ 未标注")
+            self.flag_lbl.setObjectName("flagLblTodo")
+        self.flag_lbl.setStyle(self.flag_lbl.style())
 
     def _set_status(self, msg: str, level: str = "info") -> None:
         color = {
@@ -1094,6 +1144,32 @@ QLabel#subLabel {
     color: #6b8cba;
     font-weight: bold;
     font-size: 12px;
+}
+QLabel#flagLbl {
+    font-size: 12px;
+    font-weight: bold;
+    color: #6b7280;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    padding: 0 6px;
+}
+QLabel#flagLblDone {
+    font-size: 12px;
+    font-weight: bold;
+    color: #4ade80;
+    background: #052e16;
+    border: 1px solid #166534;
+    border-radius: 4px;
+    padding: 0 6px;
+}
+QLabel#flagLblTodo {
+    font-size: 12px;
+    font-weight: bold;
+    color: #fb923c;
+    background: #1c0a00;
+    border: 1px solid #7c2d12;
+    border-radius: 4px;
+    padding: 0 6px;
 }
 QScrollArea {
     border: none;
