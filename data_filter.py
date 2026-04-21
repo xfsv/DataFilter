@@ -84,6 +84,9 @@ class DataFilterApp(QMainWindow):
         self.obj_pos_edit:      QLineEdit | None = None
         self.cont_pos_radios:   dict[str, QRadioButton] = {}
         self.cont_pos_group:    QButtonGroup | None = None
+        self.cont_pos_widget:   QWidget | None = None
+        self.target_pos_edit:   QLineEdit | None = None
+        self.target_pos_widget: QWidget | None = None
         self.hand_radios:       dict[str, QRadioButton] = {}
         self.hand_group:        QButtonGroup | None = None
         self.rating_radios:     dict[str, QRadioButton] = {}
@@ -234,64 +237,48 @@ class DataFilterApp(QMainWindow):
         self.task_group = QButtonGroup(self)
         self.task_group.setExclusive(True)
 
-        # ── 抓放任务（含两个子类型） ──────────────────
+        def _add_task(label_text: str, radio_name: str) -> None:
+            lbl = QLabel(label_text)
+            lbl.setObjectName("subLabel")
+            gl.addWidget(lbl)
+            rb = QRadioButton(radio_name)
+            self.task_radios[radio_name] = rb
+            self.task_group.addButton(rb)
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(16, 0, 0, 0)
+            row_layout.addWidget(rb)
+            row_layout.addStretch()
+            gl.addWidget(row)
+
+        def _add_separator() -> None:
+            line = QFrame()
+            line.setFrameShape(QFrame.Shape.HLine)
+            line.setObjectName("taskSeparator")
+            gl.addWidget(line)
+
+        # ── 抓放任务（仅保留简单抓放任务） ──────────────
         grab_lbl = QLabel("抓放任务：")
         grab_lbl.setObjectName("subLabel")
         gl.addWidget(grab_lbl)
 
+        grab_rb = QRadioButton("简单抓放任务")
+        self.task_radios["简单抓放任务"] = grab_rb
+        self.task_group.addButton(grab_rb)
         grab_row = QWidget()
         grab_layout = QHBoxLayout(grab_row)
         grab_layout.setContentsMargins(16, 0, 0, 0)
-        grab_layout.setSpacing(16)
-        for name in ("简单抓放任务", "分类任务"):
-            rb = QRadioButton(name)
-            self.task_radios[name] = rb
-            self.task_group.addButton(rb)
-            grab_layout.addWidget(rb)
+        grab_layout.addWidget(grab_rb)
         grab_layout.addStretch()
         gl.addWidget(grab_row)
 
-        # ── 分隔线 ────────────────────────────────────
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setObjectName("taskSeparator")
-        gl.addWidget(line)
-
-        # ── 擦拭任务（独立类别） ──────────────────────
-        wipe_lbl = QLabel("擦拭任务：")
-        wipe_lbl.setObjectName("subLabel")
-        gl.addWidget(wipe_lbl)
-
-        wipe_rb = QRadioButton("擦拭任务")
-        self.task_radios["擦拭任务"] = wipe_rb
-        self.task_group.addButton(wipe_rb)
-        wipe_row = QWidget()
-        wipe_layout = QHBoxLayout(wipe_row)
-        wipe_layout.setContentsMargins(16, 0, 0, 0)
-        wipe_layout.addWidget(wipe_rb)
-        wipe_layout.addStretch()
-        gl.addWidget(wipe_row)
-
-        # ── 分隔线 ────────────────────────────────────
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setObjectName("taskSeparator")
-        gl.addWidget(line2)
-
-        # ── 锤击任务（独立类别） ──────────────────────
-        hammer_lbl = QLabel("锤击任务：")
-        hammer_lbl.setObjectName("subLabel")
-        gl.addWidget(hammer_lbl)
-
-        hammer_rb = QRadioButton("锤击任务")
-        self.task_radios["锤击任务"] = hammer_rb
-        self.task_group.addButton(hammer_rb)
-        hammer_row = QWidget()
-        hammer_layout = QHBoxLayout(hammer_row)
-        hammer_layout.setContentsMargins(16, 0, 0, 0)
-        hammer_layout.addWidget(hammer_rb)
-        hammer_layout.addStretch()
-        gl.addWidget(hammer_row)
+        # ── 其他独立任务 ──────────────────────────────
+        _add_separator()
+        _add_task("擦拭任务：", "擦拭任务")
+        _add_separator()
+        _add_task("倾倒任务：", "倾倒任务")
+        _add_separator()
+        _add_task("堆叠任务：", "堆叠任务")
 
         return group
 
@@ -349,14 +336,14 @@ class DataFilterApp(QMainWindow):
         return frame
 
     def _build_position_section(self) -> QGroupBox:
-        """4.5 位置标签：物体位置（文本输入）+ 容器位置（1~4 单选）。"""
+        """4.5 位置标签：物体位置（文本输入）+ 容器位置（A-D 单选）/ 目标位置（文本输入，随任务动态切换）。"""
         group = QGroupBox("位置标签")
         group.setObjectName("group0")
         gl = QVBoxLayout(group)
         gl.setSpacing(4)
         gl.setContentsMargins(8, 14, 8, 10)
 
-        # ── 物体位置：自由输入 ────────────────────────
+        # ── 物体位置：自由输入（始终显示） ───────────────
         obj_lbl = QLabel("物体位置：")
         obj_lbl.setObjectName("subLabel")
         gl.addWidget(obj_lbl)
@@ -371,15 +358,20 @@ class DataFilterApp(QMainWindow):
         obj_row_layout.addWidget(self.obj_pos_edit)
         gl.addWidget(obj_row)
 
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setObjectName("taskSeparator")
-        gl.addWidget(line)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setObjectName("taskSeparator")
+        gl.addWidget(sep)
 
-        # ── 容器位置：1 / 2 / 3 / 4 单选 ────────────
+        # ── 容器位置：A/B/C/D 单选（抓放 / 擦拭任务时显示） ──
+        self.cont_pos_widget = QWidget()
+        cont_v = QVBoxLayout(self.cont_pos_widget)
+        cont_v.setContentsMargins(0, 0, 0, 0)
+        cont_v.setSpacing(2)
+
         cont_lbl = QLabel("容器位置：")
         cont_lbl.setObjectName("subLabel")
-        gl.addWidget(cont_lbl)
+        cont_v.addWidget(cont_lbl)
 
         self.cont_pos_group = QButtonGroup(self)
         self.cont_pos_group.setExclusive(True)
@@ -393,7 +385,31 @@ class DataFilterApp(QMainWindow):
             self.cont_pos_group.addButton(rb)
             cont_row_layout.addWidget(rb)
         cont_row_layout.addStretch()
-        gl.addWidget(cont_row)
+        cont_v.addWidget(cont_row)
+        gl.addWidget(self.cont_pos_widget)
+
+        # ── 目标位置：自由输入（倾倒 / 堆叠任务时显示） ──────
+        self.target_pos_widget = QWidget()
+        target_v = QVBoxLayout(self.target_pos_widget)
+        target_v.setContentsMargins(0, 0, 0, 0)
+        target_v.setSpacing(2)
+
+        target_lbl = QLabel("目标位置：")
+        target_lbl.setObjectName("subLabel")
+        target_v.addWidget(target_lbl)
+
+        target_row = QWidget()
+        target_row_layout = QHBoxLayout(target_row)
+        target_row_layout.setContentsMargins(16, 0, 0, 0)
+        self.target_pos_edit = QLineEdit()
+        self.target_pos_edit.setPlaceholderText("请输入目标位置描述")
+        self.target_pos_edit.setFixedHeight(32)
+        self.target_pos_edit.setObjectName("nameEdit")
+        target_row_layout.addWidget(self.target_pos_edit)
+        target_v.addWidget(target_row)
+        gl.addWidget(self.target_pos_widget)
+
+        self.target_pos_widget.setVisible(False)   # 默认隐藏，选倾倒/堆叠后显示
 
         return group
 
@@ -516,9 +532,12 @@ class DataFilterApp(QMainWindow):
         self.next_episode_btn.clicked.connect(self._next_episode)
         self.delete_btn.clicked.connect(self._delete_episode)
 
-        # 任意关键单选变化时刷新未填提示
-        for rb in (*self.task_radios.values(),
-                   *self.hand_radios.values(),
+        # 任务单选变化时同步切换位置标签区域并刷新未填提示
+        for rb in self.task_radios.values():
+            rb.toggled.connect(lambda _: self._on_task_changed())
+
+        # 抓取手 / 评价单选变化时刷新未填提示
+        for rb in (*self.hand_radios.values(),
                    *self.rating_radios.values()):
             rb.toggled.connect(lambda _: self._update_unfilled_warning())
 
@@ -591,6 +610,8 @@ class DataFilterApp(QMainWindow):
             cb.setChecked(False)
         if self.obj_pos_edit:
             self.obj_pos_edit.clear()
+        if self.target_pos_edit:
+            self.target_pos_edit.clear()
         for grp, radios in (
             (self.task_group,     self.task_radios),
             (self.cont_pos_group, self.cont_pos_radios),
@@ -604,7 +625,7 @@ class DataFilterApp(QMainWindow):
                 grp.setExclusive(True)
 
     # 保存时写入、读取时需排除的非标签元数据字段
-    _META_KEYS = {"episode", "采集员", "筛选员", "任务", "物体位置", "容器位置", "抓取手", "评价"}
+    _META_KEYS = {"episode", "采集员", "筛选员", "任务", "物体位置", "容器位置", "目标位置", "抓取手", "评价"}
 
     def _load_existing_flag(self, ep_path: Path) -> None:
         flag = ep_path / "flag.json"
@@ -628,6 +649,8 @@ class DataFilterApp(QMainWindow):
             # 回填位置 / 抓取手
             if "物体位置" in data and self.obj_pos_edit:
                 self.obj_pos_edit.setText(data["物体位置"])
+            if "目标位置" in data and self.target_pos_edit:
+                self.target_pos_edit.setText(data["目标位置"])
             for field, radios in (
                 ("容器位置", self.cont_pos_radios),
                 ("抓取手",   self.hand_radios),
@@ -744,7 +767,8 @@ class DataFilterApp(QMainWindow):
             "筛选员":   self.screener_edit.text().strip(),
             "任务":     _checked(self.task_radios),
             "物体位置": self.obj_pos_edit.text().strip() if self.obj_pos_edit else "",
-            "容器位置": _checked(self.cont_pos_radios),
+            "容器位置": "" if self._use_target_pos() else _checked(self.cont_pos_radios),
+            "目标位置": (self.target_pos_edit.text().strip() if self.target_pos_edit else "") if self._use_target_pos() else "",
             "抓取手":   _checked(self.hand_radios),
             "评价":     _checked(self.rating_radios),
             **self._build_structured_tags(),
@@ -823,6 +847,30 @@ class DataFilterApp(QMainWindow):
         self.episode_combo.setCurrentIndex(next_idx)
 
     # ─────────────────────────── 工具方法 ─────────────────────────────────────
+
+    # 选择这两类任务时，位置标签改为"目标位置"输入框
+    _TILT_STACK_TASKS: frozenset[str] = frozenset({"倾倒任务", "堆叠任务"})
+
+    def _use_target_pos(self) -> bool:
+        """当前任务是否属于需要"目标位置"输入的类别。"""
+        return any(
+            rb.isChecked()
+            for name, rb in self.task_radios.items()
+            if name in self._TILT_STACK_TASKS
+        )
+
+    def _on_task_changed(self) -> None:
+        """根据当前任务选择，动态切换容器位置 / 目标位置区域的显示。"""
+        use_target = any(
+            rb.isChecked()
+            for name, rb in self.task_radios.items()
+            if name in self._TILT_STACK_TASKS
+        )
+        if self.cont_pos_widget is not None:
+            self.cont_pos_widget.setVisible(not use_target)
+        if self.target_pos_widget is not None:
+            self.target_pos_widget.setVisible(use_target)
+        self._update_unfilled_warning()
 
     def _update_unfilled_warning(self) -> None:
         """检查关键单选项是否已填，未填则在底部提示条显示。"""
